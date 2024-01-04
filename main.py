@@ -1,8 +1,10 @@
 import os
+from datetime import datetime
+from typing import Dict, List
 
-from fotla.backend.api import start_api
-from fotla.backend.corpus_loader import AdhocCorpusLoader, Doc, JsonlCorpusLoader
-from fotla.backend.encoder import HFSymetricDenseEncoder
+from fotla.fotla.backend.api import start_api
+from fotla.fotla.backend.corpus_loader import AdhocCorpusLoader, Doc, JsonlCorpusLoader
+from fotla.fotla.backend.encoder import HFSymetricDenseEncoder
 
 # from fotla.backend.indexer.elasticsearch import (
 #     ElasticsearchConfig,
@@ -16,6 +18,29 @@ from fotla.fotla.backend.indexer.elasticsearch import (
 )
 from fotla.fotla.backend.retriever import DenseRetriever
 
+import pydantic
+
+
+syllabi_attr: Dict[str, str] = {
+    "subject_number" : "str",
+    "subject_name" : "str",
+    "class_method" : "str",
+    "credit" : "str",
+    "grade" : "str",
+    "semester" : "str",
+    "schedule" : "str",
+    "classroom" : "str",
+    "instructor" : "str",
+    "overview" : "str",
+    "note" : "str",
+    "can_apply_for_subject" : "str",
+    "application_condition" : "str",
+    "can_apply_for_short_term_study_abroad" : "str",
+    "subject_name_en" : "str",
+    "subject_code" : "str",
+    "required_subject_name" : "str",
+    "updated_at" : "str",
+}
 
 def load_indexer(recreate_index: bool = False):
     es_host = os.environ.get("ELASTICSEARCH_HOST", "localhost")
@@ -23,31 +48,12 @@ def load_indexer(recreate_index: bool = False):
     es_config = ElasticsearchConfig(
         es_host,
         es_port,
-        index_name=os.environ.get("FOTLA_INDEX", "kdb"),
+        index_name="kdb",
         index_scheme_path="mappings/kdb.json",
     )
     indexer = ElasticsearchIndexer(
         es_config,
-        fields=[
-            "subject_number",
-            "subject_name",
-            "class_method",
-            "credit",
-            "grade",
-            "semester",
-            "schedule",
-            "classroom",
-            "instructor",
-            "overview",
-            "note",
-            "can_apply_for_subject",
-            "application_condition",
-            "can_apply_for_short_term_study_abroad",
-            "subject_name_en",
-            "subject_code",
-            "required_subject_name",
-            "updated_at",
-        ],
+        fields=list(syllabi_attr.keys()),
         recreate_index=recreate_index,
     )
     return indexer
@@ -62,16 +68,13 @@ def load_retirever(indexer):
 
 
 def index(retriever):
-    class EsaDoc(Doc):
-        created_at: str
-        updated_at: str
+    Syllabi = pydantic.create_model("Syllabi", **syllabi_attr)
 
     corpus_loader = JsonlCorpusLoader(
         "corpus/syllabus.100.jsonl",
-        data_type=EsaDoc,
+        data_type=Syllabi,
     )
 
-    # retriever.index(corpus_loader)
     retriever.async_index(corpus_loader)
 
 
