@@ -1,0 +1,81 @@
+version: "3"
+
+services:
+  fotla-backend:
+    build:
+      context: .
+      dockerfile: fotla/fotla/backend/Dockerfile
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    working_dir: /usr/fotla
+    tty: true
+    ports:
+      - 9999:9999
+    volumes:
+      - ./:/usr/fotla
+    entrypoint: python main.py
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
+      - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT}
+      - FOTLA_INDEX=cc100
+
+  elasticsearch:
+    build:
+      context: ./fotla
+      dockerfile: vector_indexer/elasticsearch/Dockerfile.jp
+      args:
+        - ELASTIC_VERSION=${ELASTIC_VERSION}
+    environment:
+      - node.name=elasticsearch
+      - cluster.name=es-docker-cluster
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - esdata1:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sk http://localhost:9200/ | grep -q 'You Know, for Search'",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 120
+
+  fotla-frontend:
+    build:
+      context: fotla/fotla/frontend/svelte
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=development
+      - FOTLA_SEARCH_URL=http://fotla-backend:9999/search
+      - PORT=5173
+    ports:
+      - 5173:5173
+    volumes:
+      - ./fotla/fotla/frontend/svelte/src:/app/src
+      - ./fotla/fotla/frontend/svelte/static:/app/static
+      - ./fotla/fotla/frontend/svelte/vite.config.js:/app/vite.config.js
+      - ./fotla/fotla/frontend/svelte/tsconfig.json:/app/tsconfig.json
+      - ./fotla/fotla/frontend/svelte/svelte.config.js:/app/svelte.config.js
+      - ./fotla/fotla/frontend/svelte/theme.ts:/app/theme.ts
+      - ./fotla/fotla/frontend/svelte/tailwind.config.ts:/app/tailwind.config.ts
+
+volumes:
+  esdata1:
+    driver: local
