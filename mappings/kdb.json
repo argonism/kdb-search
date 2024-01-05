@@ -16,7 +16,8 @@
                 "type": "keyword"
             },
             "subject_name": {
-                "type": "text"
+                "type": "text",
+                "analyzer": "kuromoji"
             },
             "class_method": {
                 "type": "keyword"
@@ -40,16 +41,19 @@
                 "type": "text"
             },
             "overview": {
-                "type": "text"
+                "type": "text",
+                "analyzer": "kuromoji"
             },
             "note": {
-                "type": "text"
+                "type": "text",
+                "analyzer": "kuromoji"
             },
             "can_apply_for_subject": {
                 "type": "boolean"
             },
             "application_condition": {
-                "type": "text"
+                "type": "text",
+                "analyzer": "kuromoji"
             },
             "can_apply_for_short_term_study_abroad": {
                 "type": "boolean"

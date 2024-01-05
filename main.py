@@ -1,9 +1,17 @@
+import json
 import os
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Optional
+
+from pydantic import BaseModel
 
 from fotla.fotla.backend.api import start_api
-from fotla.fotla.backend.corpus_loader import AdhocCorpusLoader, Doc, JsonlCorpusLoader
+from fotla.fotla.backend.corpus_loader import (
+    AdhocCorpusLoader,
+    Doc,
+    JsonlCorpusLoader,
+    Preprocessor,
+)
 from fotla.fotla.backend.encoder import HFSymetricDenseEncoder
 
 # from fotla.backend.indexer.elasticsearch import (
@@ -18,29 +26,60 @@ from fotla.fotla.backend.indexer.elasticsearch import (
 )
 from fotla.fotla.backend.retriever import DenseRetriever
 
-import pydantic
+# syllabi_attr: Dict[str, str] = {
+#     "subject_number": (str, ...),
+#     "subject_name": (str, ...),
+#     "class_method": (str, ...),
+#     "credit": (str, ...),
+#     "grade": (str, ...),
+#     "semester": (str, ...),
+#     "schedule": (str, ...),
+#     "classroom": (str, ...),
+#     "instructor": (str, ...),
+#     "overview": (str, ...),
+#     "note": (str, ...),
+#     # "can_apply_for_subject": (bool, ...),
+#     "application_condition": (str, ...),
+#     # "can_apply_for_short_term_study_abroad": (bool, ...),
+#     "subject_name_en": (str, ...),
+#     "subject_code": (str, ...),
+#     "required_subject_name": (str, ...),
+#     "updated_at": (datetime, ...),
+# }
 
 
-syllabi_attr: Dict[str, str] = {
-    "subject_number" : "str",
-    "subject_name" : "str",
-    "class_method" : "str",
-    "credit" : "str",
-    "grade" : "str",
-    "semester" : "str",
-    "schedule" : "str",
-    "classroom" : "str",
-    "instructor" : "str",
-    "overview" : "str",
-    "note" : "str",
-    "can_apply_for_subject" : "str",
-    "application_condition" : "str",
-    "can_apply_for_short_term_study_abroad" : "str",
-    "subject_name_en" : "str",
-    "subject_code" : "str",
-    "required_subject_name" : "str",
-    "updated_at" : "str",
-}
+class Syllabi(BaseModel):
+    subject_number: str
+    subject_name: str
+    class_method: str
+    credit: Optional[str]
+    grade: str
+    semester: str
+    schedule: str
+    classroom: str
+    instructor: str
+    overview: str
+    note: str
+    # can_apply_for_subject: bool
+    application_condition: str
+    # can_apply_for_short_term_study_abroad: bool
+    subject_name_en: str
+    subject_code: str
+    required_subject_name: str
+    updated_at: datetime
+
+
+def syllabi_preprocesser(syllabi: Syllabi) -> Syllabi:
+    if syllabi.credit == "-":
+        syllabi.credit = None
+
+
+class SyllabiPreprocessor(Preprocessor):
+    def __call__(self, syllabi: Syllabi) -> Syllabi:
+        if syllabi.credit == "-":
+            syllabi.credit = None
+        return syllabi
+
 
 def load_indexer(recreate_index: bool = False):
     es_host = os.environ.get("ELASTICSEARCH_HOST", "localhost")
@@ -53,29 +92,36 @@ def load_indexer(recreate_index: bool = False):
     )
     indexer = ElasticsearchIndexer(
         es_config,
-        fields=list(syllabi_attr.keys()),
+        fields=list(Syllabi.model_fields.keys()),
         recreate_index=recreate_index,
     )
     return indexer
 
 
 def load_retirever(indexer):
-    # encoder = HFSymetricDenseEncoder("facebook/mcontriever-msmarco")
-    # retriever = DenseRetriever(encoder, indexer)
-    retriever = ElasticsearchBM25(indexer)
+    def sillabi_to_text(docs: List[Doc]) -> List[str]:
+        return [
+            " ".join(
+                [doc.subject_number, doc.subject_name, doc.overview, doc.instructor]
+            )
+            for doc in docs
+        ]
+
+    encoder = HFSymetricDenseEncoder("facebook/mcontriever-msmarco")
+    retriever = DenseRetriever(encoder, indexer, model_to_texts=sillabi_to_text)
+    # retriever = ElasticsearchBM25(indexer)
 
     return retriever
 
 
 def index(retriever):
-    Syllabi = pydantic.create_model("Syllabi", **syllabi_attr)
-
     corpus_loader = JsonlCorpusLoader(
-        "corpus/syllabus.100.jsonl",
+        "corpus/syllabus.jsonl",
         data_type=Syllabi,
+        preprocessores=[SyllabiPreprocessor()],
     )
 
-    retriever.async_index(corpus_loader)
+    retriever.index(corpus_loader)
 
 
 def main(args):
@@ -86,8 +132,14 @@ def main(args):
         index(retriever)
 
     if not args.retrieve == "":
-        results = retriever.retrieve([args.retrieve], 100)
-        print(results)
+        search_fields = [
+            "subject_number",
+            "subject_name",
+        ]
+        results = retriever.retrieve(
+            [args.retrieve], 100, search_fields=search_fields
+        )
+        print(json.dumps(results, indent=2))
     else:
         start_api(retriever, port=9999)
 
@@ -106,5 +158,6 @@ if __name__ == "__main__":
     import logging
 
     logging.basicConfig(level=logging.DEBUG)
+    # logging.basicConfig(level=logging.WARNING)
     args = parse_args()
     main(args)
