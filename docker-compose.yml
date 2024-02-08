@@ -1,10 +1,10 @@
 version: "3"
 
 services:
-  fotla-backend:
+  kasyore-backend:
     build:
       context: .
-      dockerfile: fotla/fotla/backend/Dockerfile
+      dockerfile: src/backend/Dockerfile
     deploy:
       resources:
         reservations:
@@ -12,12 +12,12 @@ services:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
-    working_dir: /usr/fotla
+    working_dir: /usr/kasyore
     tty: true
     ports:
       - 9999:9999
     volumes:
-      - ./:/usr/fotla
+      - ./:/usr/kasyore
     entrypoint: python main.py
     depends_on:
       elasticsearch:
@@ -25,11 +25,10 @@ services:
     environment:
       - ELASTICSEARCH_HOST=${ELASTICSEARCH_HOST}
       - ELASTICSEARCH_PORT=${ELASTICSEARCH_PORT}
-      - FOTLA_INDEX=cc100
 
   elasticsearch:
     build:
-      context: ./fotla
+      context: .
       dockerfile: vector_indexer/elasticsearch/Dockerfile.jp
       args:
         - ELASTIC_VERSION=${ELASTIC_VERSION}
@@ -44,7 +43,7 @@ services:
         soft: -1
         hard: -1
     volumes:
-      - esdata1:/usr/share/elasticsearch/data
+      - es1vol:/usr/share/elasticsearch
     ports:
       - 9200:9200
     healthcheck:
@@ -57,25 +56,25 @@ services:
       timeout: 10s
       retries: 120
 
-  fotla-frontend:
+  kasyore-frontend:
     build:
-      context: fotla/fotla/frontend/svelte
+      context: src/frontend/svelte
       dockerfile: Dockerfile
     environment:
       - NODE_ENV=development
-      - FOTLA_SEARCH_URL=http://fotla-backend:9999/search
+      - BACKEND_URL=http://kasyore-backend:9999/search
       - PORT=5173
     ports:
       - 5173:5173
-    volumes:
-      - ./fotla/fotla/frontend/svelte/src:/app/src
-      - ./fotla/fotla/frontend/svelte/static:/app/static
-      - ./fotla/fotla/frontend/svelte/vite.config.js:/app/vite.config.js
-      - ./fotla/fotla/frontend/svelte/tsconfig.json:/app/tsconfig.json
-      - ./fotla/fotla/frontend/svelte/svelte.config.js:/app/svelte.config.js
-      - ./fotla/fotla/frontend/svelte/theme.ts:/app/theme.ts
-      - ./fotla/fotla/frontend/svelte/tailwind.config.ts:/app/tailwind.config.ts
+
+  tunnel:
+    restart: always
+    image: cloudflare/cloudflared
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=eyJhIjoiMTJhMDg2MzIzNjRiZGM5MzAyOTkwZWFkMTM5YjVjMWUiLCJ0IjoiNTAwNTI4ZWUtNGNiMC00YmRiLWI5MmEtN2NkODllMGI3NmYyIiwicyI6Ik9EUTFabVExTkRrdFpUaG1NeTAwWVRFMExXSTBObUV0WVRreFlUWTVNR00xWWpRMyJ9
+
 
 volumes:
-  esdata1:
+  es1vol:
     driver: local

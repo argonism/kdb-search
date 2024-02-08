@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "densa"
+name = "kasyore"
 version = "0.1.0"
 description = ""
 authors = ["kush <kouta528bado@yahoo.co.jp>"]
@@ -7,7 +7,36 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.9,<4.0"
-fotla = { path = "./fotla", develop = true }
+fastapi = "^0.103.2"
+more-itertools = "^10.1.0"
+numpy = "1.24.4"
+transformers = { version = "^4.34.1", extras = ["encoder"] }
+elasticsearch = {extras = ["async"], version = "^8.11.0"}
+torch = { version = "^2.1.1", extras = ["encoder"] }
+uvicorn = "^0.24.0.post1"
+aiohttp = "^3.9.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.9.1"
+isort = "^5.12.0"
+flake8-docstrings = "^1.7.0"
+mypy = "^1.5.1"
+pytest = "^7.4.2"
+pytest-cov = "^4.1.0"
+tox = "^4.11.3"
+toml = "^0.10.2"
+bump2version = "^1.0.1"
+click = "^8.1.7"
+ruff = "^0.0.292"
+
+[tool.poetry.group.docs.dependencies]
+mkdocs = "^1.5.3"
+mkdocs-include-markdown-plugin = "^1.0.0"
+mkdocs-material = "^9.4.3"
+mkdocs-material-extensions = "^1.2"
+mkdocs-autorefs = "^0.5.0"
+mkdocstrings = { version = "^0.23.0", extras = ["python"] }
+mkdocs-macros-plugin = "^1.0.4"
 
 [build-system]
 requires = ["poetry-core"]

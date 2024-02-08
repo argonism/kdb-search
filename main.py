@@ -5,80 +5,26 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel
 
-from fotla.fotla.backend.api import start_api
-from fotla.fotla.backend.corpus_loader import (
+from src.backend.api import start_api
+from src.backend.corpus_loader import (
     AdhocCorpusLoader,
     Doc,
     JsonlCorpusLoader,
     Preprocessor,
 )
-from fotla.fotla.backend.encoder import HFSymetricDenseEncoder
-
-# from fotla.backend.indexer.elasticsearch import (
-#     ElasticsearchConfig,
-#     ElasticsearchIndexer,
-# )
-# from fotla.backend.retriever import DenseRetriever
-from fotla.fotla.backend.indexer.elasticsearch import (
+from src.backend.encoder import HFSymetricDenseEncoder
+from src.backend.indexer.elasticsearch import (
     ElasticsearchBM25,
     ElasticsearchConfig,
     ElasticsearchIndexer,
 )
-from fotla.fotla.backend.retriever import DenseRetriever
-
-# syllabi_attr: Dict[str, str] = {
-#     "subject_number": (str, ...),
-#     "subject_name": (str, ...),
-#     "class_method": (str, ...),
-#     "credit": (str, ...),
-#     "grade": (str, ...),
-#     "semester": (str, ...),
-#     "schedule": (str, ...),
-#     "classroom": (str, ...),
-#     "instructor": (str, ...),
-#     "overview": (str, ...),
-#     "note": (str, ...),
-#     # "can_apply_for_subject": (bool, ...),
-#     "application_condition": (str, ...),
-#     # "can_apply_for_short_term_study_abroad": (bool, ...),
-#     "subject_name_en": (str, ...),
-#     "subject_code": (str, ...),
-#     "required_subject_name": (str, ...),
-#     "updated_at": (datetime, ...),
-# }
+from src.backend.retriever import DenseRetriever
 
 
-class Syllabi(BaseModel):
-    subject_number: str
-    subject_name: str
-    class_method: str
-    credit: Optional[str]
-    grade: str
-    semester: str
-    schedule: str
-    classroom: str
-    instructor: str
-    overview: str
-    note: str
-    # can_apply_for_subject: bool
-    application_condition: str
-    # can_apply_for_short_term_study_abroad: bool
-    subject_name_en: str
-    subject_code: str
-    required_subject_name: str
+class KasyoreDoc(BaseModel):
+    title: str
+    body: str
     updated_at: datetime
-
-
-def syllabi_preprocesser(syllabi: Syllabi) -> Syllabi:
-    if syllabi.credit == "-":
-        syllabi.credit = None
-
-
-class SyllabiPreprocessor(Preprocessor):
-    def __call__(self, syllabi: Syllabi) -> Syllabi:
-        if syllabi.credit == "-":
-            syllabi.credit = None
-        return syllabi
 
 
 def load_indexer(recreate_index: bool = False):
@@ -87,25 +33,20 @@ def load_indexer(recreate_index: bool = False):
     es_config = ElasticsearchConfig(
         es_host,
         es_port,
-        index_name="kdb",
-        index_scheme_path="mappings/kdb.json",
+        index_name="kasyore",
+        index_scheme_path="mappings/kasyore.json",
     )
     indexer = ElasticsearchIndexer(
         es_config,
-        fields=list(Syllabi.model_fields.keys()),
+        fields=list(KasyoreDoc.model_fields.keys()),
         recreate_index=recreate_index,
     )
     return indexer
 
 
 def load_retirever(indexer):
-    def sillabi_to_text(docs: List[Doc]) -> List[str]:
-        return [
-            " ".join(
-                [doc.subject_number, doc.subject_name, doc.overview, doc.instructor]
-            )
-            for doc in docs
-        ]
+    def sillabi_to_text(docs: List[KasyoreDoc]) -> List[str]:
+        return [" ".join([doc.title, doc.body]) for doc in docs]
 
     encoder = HFSymetricDenseEncoder("facebook/mcontriever-msmarco")
     retriever = DenseRetriever(encoder, indexer, model_to_texts=sillabi_to_text)
@@ -116,9 +57,8 @@ def load_retirever(indexer):
 
 def index(retriever):
     corpus_loader = JsonlCorpusLoader(
-        "corpus/syllabus.jsonl",
-        data_type=Syllabi,
-        preprocessores=[SyllabiPreprocessor()],
+        "corpus/fotla.esa_posts.10.jsonl",
+        data_type=KasyoreDoc,
     )
 
     retriever.index(corpus_loader)
@@ -133,8 +73,8 @@ def main(args):
 
     if not args.retrieve == "":
         search_fields = [
-            "subject_number",
-            "subject_name",
+            "title",
+            "body",
         ]
         results = retriever.retrieve(
             [args.retrieve], 100, search_fields=search_fields
